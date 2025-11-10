@@ -2,9 +2,55 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <readline/readline.h>
-#include <readline/history.h>
 #include <dirent.h>
+
+static History history;
+
+// Initialize history
+void init_history(void) {
+    history.count = 0;
+}
+
+// Add command to history
+void add_to_history(const char* cmd) {
+    if (history.count >= HISTORY_SIZE) {
+        free(history.commands[0]);
+        for (int i = 1; i < history.count; i++) {
+            history.commands[i-1] = history.commands[i];
+        }
+        history.count--;
+    }
+    history.commands[history.count++] = strdup(cmd);
+}
+
+// Show history
+void show_history(void) {
+    printf("Command History:\n");
+    for (int i = 0; i < history.count; i++) {
+        printf("%d: %s\n", i + 1, history.commands[i]);
+    }
+}
+
+// Get command from history
+char* get_history_command(int n) {
+    if (n < 1 || n > history.count) return NULL;
+    return history.commands[n-1];
+}
+
+// Simple input function
+char* read_cmd(const char* prompt) {
+    printf("%s", prompt);
+    fflush(stdout);
+    
+    static char buffer[INPUT_BUFFER_SIZE];
+    if (fgets(buffer, INPUT_BUFFER_SIZE, stdin) == NULL) {
+        return NULL;
+    }
+    
+    // Remove newline
+    buffer[strcspn(buffer, "\n")] = 0;
+    return (strlen(buffer) > 0) ? strdup(buffer) : NULL;
+}
 
 // Tokenize input line
 char** tokenize(char* line) {
@@ -97,7 +143,7 @@ int parse_command_line(char* line, Command* commands) {
     }
     free(tokens);
     
-    return cmd_count + 1; // Return number of commands
+    return cmd_count + 1;
 }
 
 // Free allocated memory in commands
@@ -113,7 +159,12 @@ void free_commands(Command* commands, int count) {
 
 // Execute single command with I/O redirection
 void execute_redirection(Command* cmd) {
-    if (cmd->argc == 0) return; // Empty command
+    if (cmd->argc == 0) return;
+    
+    // Check if it's a built-in command first
+    if (handle_builtin(cmd->args)) {
+        return;
+    }
     
     pid_t pid = fork();
     
@@ -154,7 +205,6 @@ void execute_redirection(Command* cmd) {
         exit(127);
     } 
     else if (pid > 0) {
-        // Parent process - wait for completion
         int status;
         waitpid(pid, &status, 0);
     } 
@@ -168,7 +218,7 @@ void execute_pipeline(Command* commands, int num_commands) {
     int pipefds[2 * (num_commands - 1)];
     pid_t pids[num_commands];
     
-    // Create pipes for the pipeline
+    // Create pipes
     for (int i = 0; i < num_commands - 1; i++) {
         if (pipe(pipefds + i * 2) < 0) {
             perror("pipe");
@@ -176,14 +226,14 @@ void execute_pipeline(Command* commands, int num_commands) {
         }
     }
     
-    // Fork child processes for each command
+    // Fork child processes
     for (int i = 0; i < num_commands; i++) {
         pids[i] = fork();
         
         if (pids[i] == 0) {
             // Child process
             
-            // Connect to previous command's output (if not first command)
+            // Connect to previous command's output
             if (i > 0) {
                 if (dup2(pipefds[(i-1)*2], STDIN_FILENO) == -1) {
                     perror("dup2 pipe input");
@@ -191,7 +241,7 @@ void execute_pipeline(Command* commands, int num_commands) {
                 }
             }
             
-            // Connect to next command's input (if not last command)
+            // Connect to next command's input
             if (i < num_commands - 1) {
                 if (dup2(pipefds[i*2 + 1], STDOUT_FILENO) == -1) {
                     perror("dup2 pipe output");
@@ -199,12 +249,12 @@ void execute_pipeline(Command* commands, int num_commands) {
                 }
             }
             
-            // Close all pipe file descriptors in child
+            // Close all pipe file descriptors
             for (int j = 0; j < 2 * (num_commands - 1); j++) {
                 close(pipefds[j]);
             }
             
-            // Handle file redirection for this command (overrides pipes)
+            // Handle file redirection
             if (commands[i].input_file != NULL) {
                 int fd_in = open(commands[i].input_file, O_RDONLY);
                 if (fd_in < 0) {
@@ -225,7 +275,7 @@ void execute_pipeline(Command* commands, int num_commands) {
                 close(fd_out);
             }
             
-            // Execute the command
+            // Execute command
             execvp(commands[i].args[0], commands[i].args);
             fprintf(stderr, "Command not found: %s\n", commands[i].args[0]);
             exit(127);
@@ -241,7 +291,7 @@ void execute_pipeline(Command* commands, int num_commands) {
         close(pipefds[i]);
     }
     
-    // Wait for all child processes to complete
+    // Wait for all children
     for (int i = 0; i < num_commands; i++) {
         waitpid(pids[i], NULL, 0);
     }
@@ -250,19 +300,13 @@ void execute_pipeline(Command* commands, int num_commands) {
 // Execute parsed commands
 void execute_parsed_commands(Command* commands, int num_commands) {
     if (num_commands == 1) {
-        // Single command - check if it's a builtin first
-        if (commands[0].argc > 0 && handle_builtin(commands[0].args)) {
-            return;
-        }
-        // Not a builtin, execute with possible redirection
         execute_redirection(&commands[0]);
     } else {
-        // Multiple commands - pipeline
         execute_pipeline(commands, num_commands);
     }
 }
 
-// Check for built-in commands
+// Handle built-in commands
 int handle_builtin(char** arglist) {
     if (!arglist[0]) return 0;
     
@@ -283,6 +327,10 @@ int handle_builtin(char** arglist) {
     }
     
     if (strcmp(arglist[0], "exit") == 0) {
+        // Cleanup history
+        for (int i = 0; i < history.count; i++) {
+            free(history.commands[i]);
+        }
         printf("Shell exited.\n");
         exit(0);
     }
@@ -295,22 +343,11 @@ int handle_builtin(char** arglist) {
         printf("  command > output.txt   - Write output to file\n");
         printf("Pipes:\n");
         printf("  cmd1 | cmd2 | cmd3     - Chain commands together\n");
-        printf("Examples:\n");
-        printf("  ls -l > files.txt\n");
-        printf("  sort < data.txt\n");
-        printf("  cat file.txt | grep \"pattern\" | wc -l\n");
         return 1;
     }
     
     if (strcmp(arglist[0], "history") == 0) {
-        HIST_ENTRY **hist = history_list();
-        if (hist) {
-            for (int i = 0; hist[i]; i++) {
-                printf("%d %s\n", i + 1, hist[i]->line);
-            }
-        } else {
-            printf("No command history.\n");
-        }
+        show_history();
         return 1;
     }
     
@@ -320,71 +357,4 @@ int handle_builtin(char** arglist) {
     }
     
     return 0;
-}
-
-// Command generator for tab completion
-char* command_generator(const char* text, int state) {
-    static int list_index, len;
-    const char *name;
-    
-    // List of built-in commands
-    static const char* builtins[] = {
-        "cd", "exit", "help", "history", "jobs", NULL
-    };
-    
-    // Common system commands
-    static const char* common_commands[] = {
-        "ls", "pwd", "cat", "echo", "grep", "mkdir", "rm", "cp", "mv", "whoami", 
-        "ps", "kill", "chmod", "chown", "find", "sort", "wc", "head", "tail", NULL
-    };
-
-    if (!state) {
-        list_index = 0;
-        len = strlen(text);
-    }
-
-    // First, check built-in commands
-    while (builtins[list_index]) {
-        name = builtins[list_index++];
-        if (strncmp(name, text, len) == 0) {
-            return strdup(name);
-        }
-    }
-
-    // Then check common system commands
-    list_index = 0;
-    while (common_commands[list_index]) {
-        name = common_commands[list_index++];
-        if (strncmp(name, text, len) == 0) {
-            return strdup(name);
-        }
-    }
-
-    // Finally, check files in current directory
-    static DIR *dir = NULL;
-    static struct dirent *entry = NULL;
-    
-    if (!state) {
-        if (dir) closedir(dir);
-        dir = opendir(".");
-    }
-    
-    if (dir) {
-        while ((entry = readdir(dir)) != NULL) {
-            name = entry->d_name;
-            if (name[0] != '.' && strncmp(name, text, len) == 0) {
-                return strdup(name);
-            }
-        }
-        closedir(dir);
-        dir = NULL;
-    }
-
-    return NULL;
-}
-
-// Completion function for Readline
-char** shell_completion(const char* text, int start, int end) {
-    rl_attempted_completion_over = 1;
-    return rl_completion_matches(text, command_generator);
 }

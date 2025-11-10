@@ -1,8 +1,8 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g -Iinclude
-LDFLAGS = -lreadline
+LDFLAGS = 
 
-SRC = src/main.c src/shell.c src/execute.c
+SRC = src/main.c src/shell.c
 OUT = bin/myshell
 
 all:
@@ -11,4 +11,4 @@ all:
 
 clean:
 	rm -f $(OUT)
-	rm -f .myshell_history
+	rm -f *.txt
