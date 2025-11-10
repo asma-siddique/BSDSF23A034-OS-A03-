@@ -19,9 +19,8 @@ char* read_cmd(char* prompt, FILE* fp);
 char** tokenize(char* cmdline);
 int execute(char** arglist);
 
-// Built-in commands
-int is_builtin(char** arglist);
-int execute_builtin(char** arglist);
+// Built-in command handler
+int handle_builtin(char** arglist);
 
 #endif
 

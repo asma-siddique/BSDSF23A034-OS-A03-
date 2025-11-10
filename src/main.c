@@ -7,8 +7,13 @@ int main() {
     while ((cmdline = read_cmd(PROMPT, stdin)) != NULL) {
         arglist = tokenize(cmdline);
         if (arglist != NULL) {
-            execute(arglist);
 
+            // Check for built-in first
+            if (!handle_builtin(arglist)) {
+                execute(arglist); // Only run external if not a built-in
+            }
+
+            // Free memory
             for (int i = 0; arglist[i] != NULL; i++) free(arglist[i]);
             free(arglist);
         }
