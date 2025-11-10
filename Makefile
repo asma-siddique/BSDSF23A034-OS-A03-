@@ -1,14 +1,14 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g -Iinclude
+LDFLAGS = -lreadline
+
 SRC = src/main.c src/shell.c src/execute.c
-TARGET = bin/myshell
+OUT = bin/myshell
 
-all: $(TARGET)
-
-$(TARGET): $(SRC)
+all:
 	mkdir -p bin
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRC)
+	$(CC) $(CFLAGS) -o $(OUT) $(SRC) $(LDFLAGS)
 
 clean:
-	rm -f $(TARGET)
-
+	rm -f $(OUT)
+	rm -f .myshell_history
