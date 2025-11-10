@@ -1,15 +1,12 @@
 #include "shell.h"
 
-// Handles built-in commands: returns 1 if handled, 0 if not
+// Handle built-in commands
 int handle_builtin(char** arglist) {
     if (!arglist || !arglist[0]) return 0;
 
     if (strcmp(arglist[0], "cd") == 0) {
-        if (!arglist[1]) {
-            fprintf(stderr, "cd: missing argument\n");
-        } else if (chdir(arglist[1]) != 0) {
-            perror("cd failed");
-        }
+        if (!arglist[1]) fprintf(stderr, "cd: missing argument\n");
+        else if (chdir(arglist[1]) != 0) perror("cd failed");
         return 1;
     }
 
@@ -34,7 +31,7 @@ int handle_builtin(char** arglist) {
     return 0; // Not a built-in
 }
 
-// Executes external commands (fork + exec)
+// Execute external commands
 int execute(char** arglist) {
     if (!arglist || !arglist[0]) return 0;
 

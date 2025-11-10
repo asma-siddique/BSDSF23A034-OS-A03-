@@ -1,13 +1,14 @@
 CC = gcc
 CFLAGS = -Wall -Wextra -g -Iinclude
 SRC = src/main.c src/shell.c src/execute.c
-BIN = shell
+TARGET = bin/myshell
 
-all: $(BIN)
+all: $(TARGET)
 
-$(BIN): $(SRC)
-	$(CC) $(CFLAGS) -o $(BIN) $(SRC)
+$(TARGET): $(SRC)
+	mkdir -p bin
+	$(CC) $(CFLAGS) -o $(TARGET) $(SRC)
 
 clean:
-	rm -f $(BIN)
+	rm -f $(TARGET)
 

@@ -8,9 +8,9 @@ int main() {
         arglist = tokenize(cmdline);
         if (arglist != NULL) {
 
-            // Check for built-in first
+            // Handle built-in commands first
             if (!handle_builtin(arglist)) {
-                execute(arglist); // Only run external if not a built-in
+                execute(arglist); // Only run external if not built-in
             }
 
             // Free memory
