@@ -7,45 +7,38 @@ int main() {
     char* cmdline;
 
     init_history();
+    init_jobs();
     
     printf("========================================\n");
-    printf("    FCIT Shell - I/O Redirection & Pipes\n");
+    printf("  FCIT Shell - Command Chaining & Jobs\n");
     printf("========================================\n");
     printf("Type 'exit' to quit\n\n");
 
     while (1) {
-        // Show prompt and read input
+        cleanup_zombies();
+        
         printf(SHELL_PROMPT);
-        fflush(stdout);  // Force the prompt to display
+        fflush(stdout);
         
         cmdline = read_cmd();
-        
-        if (cmdline == NULL) {
-            // This means EOF (Ctrl+D) or empty input
-            printf("\n");
-            break;
-        }
+        if (cmdline == NULL) continue;
 
-        // Handle exit command
         if (strcmp(cmdline, "exit") == 0) {
             free(cmdline);
             break;
         }
 
-        // Add to history
         add_to_history(cmdline);
 
-        // Parse and execute
-        Command commands[MAX_PIPES];
+        Command commands[MAX_COMMANDS];
         int num_commands = parse_command_line(cmdline, commands);
         
         if (num_commands > 0) {
-            execute_parsed_commands(commands, num_commands);
-        } else {
-            printf("Error: Failed to parse command\n");
+            for (int i = 0; i < num_commands; i++) {
+                execute_command(&commands[i]);
+            }
         }
         
-        // Cleanup
         free_commands(commands, num_commands);
         free(cmdline);
     }
