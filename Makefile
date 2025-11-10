@@ -1,27 +1,13 @@
-# Compiler
 CC = gcc
-
-# Compiler flags
 CFLAGS = -Wall -Wextra -g -Iinclude
+SRC = src/main.c src/shell.c src/execute.c
+BIN = shell
 
-# Source files
-SRCS = src/main.c src/shell.c src/execute.c
+all: $(BIN)
 
-# Output executable
-TARGET = shell
+$(BIN): $(SRC)
+	$(CC) $(CFLAGS) -o $(BIN) $(SRC)
 
-# Default target: build the shell
-all: $(TARGET)
-
-# Compile the executable
-$(TARGET): $(SRCS)
-	$(CC) $(CFLAGS) -o $(TARGET) $(SRCS)
-
-# Clean build files
 clean:
-	rm -f $(TARGET) *.o
-
-# Run the shell
-run: $(TARGET)
-	./$(TARGET)
+	rm -f $(BIN)
 

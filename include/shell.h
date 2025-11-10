@@ -1,10 +1,9 @@
-
 #ifndef SHELL_H
 #define SHELL_H
 
 #include <stdio.h>
-#include <string.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -15,10 +14,14 @@
 #define ARGLEN 30
 #define PROMPT "FCIT> "
 
-// Function prototypes
+// Core shell functions
 char* read_cmd(char* prompt, FILE* fp);
 char** tokenize(char* cmdline);
 int execute(char** arglist);
 
-#endif // SHELL_H
+// Built-in commands
+int is_builtin(char** arglist);
+int execute_builtin(char** arglist);
+
+#endif
 
