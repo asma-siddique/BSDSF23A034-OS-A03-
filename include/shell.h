@@ -14,7 +14,7 @@ typedef struct {
     int running;
 } Job;
 
-void trim(char *str);
+static void trim(char *str);
 char *read_cmd(void);
 void execute_command(char *cmdline, int background);
 
