@@ -1,15 +1,14 @@
-kCC = gcc
+CC = cc
 CFLAGS = -Wall -Wextra -g -Iinclude
-SRC = src/main.c src/shell.c
-OUT = bin/myshell
+TARGET = bin/myshell
+SOURCES = src/main.c src/shell.c src/execute.c
 
-all: $(OUT)
-
-$(OUT): $(SRC)
+$(TARGET): $(SOURCES)
 	mkdir -p bin
-	$(CC) $(CFLAGS) -o $(OUT) $(SRC)
+	$(CC) $(CFLAGS) -o $(TARGET) $(SOURCES)
 
 clean:
-	rm -f bin/myshell
+	rm -f $(TARGET)
 	rm -f *.txt
 
+.PHONY: clean
