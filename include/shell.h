@@ -5,22 +5,29 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
 #include <sys/wait.h>
-#include <errno.h>
 
-#define MAX_LEN 512
-#define MAXARGS 10
-#define ARGLEN 30
-#define PROMPT "FCIT> "
+#define MAX_LEN     1024
+#define MAXARGS     64
+#define ARGLEN      64
+#define PROMPT      "FCIT> "
 
-// Core shell functions
+/* ---------- History configuration ---------- */
+#define HISTORY_SIZE 20
+
+extern char* history[HISTORY_SIZE];
+extern int history_count;
+
+/* ---------- Core shell functions ---------- */
 char* read_cmd(char* prompt, FILE* fp);
 char** tokenize(char* cmdline);
 int execute(char** arglist);
-
-// Built-in command handler
 int handle_builtin(char** arglist);
+
+/* ---------- History helper functions ---------- */
+void add_to_history(const char* cmd);
+void show_history(void);
+char* get_history_command(int n);
 
 #endif
 

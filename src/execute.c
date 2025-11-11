@@ -1,6 +1,6 @@
 #include "shell.h"
 
-// Handle built-in commands
+/* ---------------- Built-in commands ---------------- */
 int handle_builtin(char** arglist) {
     if (!arglist || !arglist[0]) return 0;
 
@@ -20,6 +20,7 @@ int handle_builtin(char** arglist) {
         printf("exit - Exit the shell\n");
         printf("help - Show this help message\n");
         printf("jobs - Show job status (not implemented)\n");
+        printf("history - Show recent commands\n");
         return 1;
     }
 
@@ -28,10 +29,15 @@ int handle_builtin(char** arglist) {
         return 1;
     }
 
-    return 0; // Not a built-in
+    if (strcmp(arglist[0], "history") == 0) {
+        show_history();
+        return 1;
+    }
+
+    return 0;  // Not a built-in
 }
 
-// Execute external commands
+/* ---------------- External commands ---------------- */
 int execute(char** arglist) {
     if (!arglist || !arglist[0]) return 0;
 
@@ -43,11 +49,11 @@ int execute(char** arglist) {
         exit(1);
     }
 
-    if (cpid == 0) { // Child process
+    if (cpid == 0) {  // child
         execvp(arglist[0], arglist);
         perror("Command not found");
         exit(1);
-    } else { // Parent process
+    } else {          // parent
         waitpid(cpid, &status, 0);
     }
 
