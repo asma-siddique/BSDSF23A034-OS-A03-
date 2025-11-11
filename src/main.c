@@ -20,24 +20,8 @@ static char* handle_history_recall(char *cmdline) {
     return strdup(hist_cmd); // duplicate safely
 }
 
-// Trim leading/trailing spaces
-static void trim(char *str) {
-    char *end;
 
-    // Trim leading space
-    while(isspace((unsigned char)*str)) str++;
-
-    if(*str == 0) return; // all spaces?
-
-    // Trim trailing space
-    end = str + strlen(str) - 1;
-    while(end > str && isspace((unsigned char)*end)) end--;
-
-    // Write new null terminator
-    *(end+1) = '\0';
-}
-
-int main() {
+int main(){
     char *cmdline;
 
     // Initialize history and background jobs
