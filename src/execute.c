@@ -1,56 +1,23 @@
 #include "shell.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <string.h>
 
-// Handle built-in commands
-int handle_builtin(char** arglist) {
-    if (!arglist || !arglist[0]) return 0;
+void execute(char** arglist) {
+    if (arglist[0] == NULL) return;
 
-    if (strcmp(arglist[0], "cd") == 0) {
-        if (!arglist[1]) fprintf(stderr, "cd: missing argument\n");
-        else if (chdir(arglist[1]) != 0) perror("cd failed");
-        return 1;
-    }
-
-    if (strcmp(arglist[0], "exit") == 0) {
-        exit(0);
-    }
-
-    if (strcmp(arglist[0], "help") == 0) {
-        printf("Built-in commands:\n");
-        printf("cd <directory> - Change directory\n");
-        printf("exit - Exit the shell\n");
-        printf("help - Show this help message\n");
-        printf("jobs - Show job status (not implemented)\n");
-        return 1;
-    }
-
-    if (strcmp(arglist[0], "jobs") == 0) {
-        printf("Job control not yet implemented.\n");
-        return 1;
-    }
-
-    return 0; // Not a built-in
-}
-
-// Execute external commands
-int execute(char** arglist) {
-    if (!arglist || !arglist[0]) return 0;
-
-    int status;
-    int cpid = fork();
-
-    if (cpid < 0) {
-        perror("fork failed");
-        exit(1);
-    }
-
-    if (cpid == 0) { // Child process
+    pid_t pid = fork();
+    
+    if (pid == 0) {
         execvp(arglist[0], arglist);
-        perror("Command not found");
+        fprintf(stderr, "Command not found: %s\n", arglist[0]);
         exit(1);
-    } else { // Parent process
-        waitpid(cpid, &status, 0);
+    } else if (pid > 0) {
+        int status;
+        waitpid(pid, &status, 0);
+    } else {
+        perror("fork failed");
     }
-
-    return 0;
 }
-

@@ -6,40 +6,31 @@
 int main() {
     char* cmdline;
 
-    init_history();
-    init_jobs();
-    
     printf("========================================\n");
-    printf("  FCIT Shell - Command Chaining & Jobs\n");
+    printf("   FCIT Shell - If-Then-Else Support\n");
     printf("========================================\n");
     printf("Type 'exit' to quit\n\n");
 
     while (1) {
-        cleanup_zombies();
-        
-        printf(SHELL_PROMPT);
-        fflush(stdout);
-        
-        cmdline = read_cmd();
-        if (cmdline == NULL) continue;
+        cmdline = read_cmd_if();
+        if (cmdline == NULL) {
+            continue;
+        }
 
         if (strcmp(cmdline, "exit") == 0) {
             free(cmdline);
             break;
         }
 
-        add_to_history(cmdline);
-
-        Command commands[MAX_COMMANDS];
-        int num_commands = parse_command_line(cmdline, commands);
+        char** args = tokenize(cmdline);
+        execute_command(args);
         
-        if (num_commands > 0) {
-            for (int i = 0; i < num_commands; i++) {
-                execute_command(&commands[i]);
-            }
+        // Free tokens
+        for (int i = 0; args[i] != NULL; i++) {
+            free(args[i]);
         }
+        free(args);
         
-        free_commands(commands, num_commands);
         free(cmdline);
     }
 
