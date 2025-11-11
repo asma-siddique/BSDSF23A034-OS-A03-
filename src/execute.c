@@ -71,6 +71,10 @@ int handle_builtin(char** args) {
         printf("Built-in commands: cd, exit, help, history, jobs, set\n");
         printf("Variable assignment: VARNAME=value\n");
         printf("Variable expansion: echo $VARNAME\n");
+        printf("Command chaining: cmd1 ; cmd2\n");
+        printf("Background jobs: command &\n");
+        printf("History recall: !n\n");
+        printf("Control structures: if-then-else-fi\n");
         return 1;
     }
 
