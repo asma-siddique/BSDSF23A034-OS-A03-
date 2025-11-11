@@ -2,56 +2,92 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+
+// Handle !n recall from history
+static char* handle_history_recall(char *cmdline) {
+    if (cmdline[0] != '!') return strdup(cmdline);  // make a copy if normal
+
+    int n = atoi(cmdline + 1);
+    char *hist_cmd = get_history_command(n);
+    if (hist_cmd == NULL) {
+        printf("No such command in history: !%d\n", n);
+        return NULL;
+    }
+    printf("Re-executing: %s\n", hist_cmd);
+    return strdup(hist_cmd); // duplicate safely
+}
 
 int main() {
-    char* cmdline;
+    char *cmdline;
 
-    // Initialize history and background jobs
     init_history();
     init_jobs();
 
     printf("========================================\n");
-    printf("  FCIT Shell - Command Chaining & Jobs\n");
+    printf("  FCIT Shell - Feature 6 (Jobs & History)\n");
     printf("========================================\n");
     printf("Type 'exit' to quit\n\n");
 
     while (1) {
-        // Reap any finished background processes
         cleanup_zombies();
-
-        // Show prompt and read input
         printf(SHELL_PROMPT);
         fflush(stdout);
 
-        cmdline = read_cmd(SHELL_PROMPT);
-        if (cmdline == NULL) {
-            // EOF (Ctrl+D) or empty input
-            printf("\n");
-            break;
+        cmdline = read_cmd();
+        if (cmdline == NULL)
+            continue;
+
+        trim(cmdline);
+        if (strlen(cmdline) == 0) {
+            free(cmdline);
+            continue;
         }
 
-        // Exit command
         if (strcmp(cmdline, "exit") == 0) {
             free(cmdline);
             break;
         }
 
-        // Add command to history
-        add_to_history(cmdline);
+        // Handle history recall (!n)
+        char *expanded_cmd = handle_history_recall(cmdline);
+        free(cmdline); // free user input
+        if (expanded_cmd == NULL)
+            continue;
 
-        // Parse commands (handles pipelines, redirection, etc.)
-        Command commands[MAX_COMMANDS];
-        int num_commands = parse_command_line(cmdline, commands);
+        add_to_history(expanded_cmd);
 
-        if (num_commands > 0) {
-            for (int i = 0; i < num_commands; i++) {
-                execute_command(&commands[i]);
+        // Handle command chaining (;)
+        char *saveptr1;
+        char *command_group = strtok_r(expanded_cmd, ";", &saveptr1);
+
+        while (command_group != NULL) {
+            trim(command_group);
+            if (strlen(command_group) == 0) {
+                command_group = strtok_r(NULL, ";", &saveptr1);
+                continue;
             }
+
+            // Handle background (&)
+            int background = 0;
+            if (command_group[strlen(command_group) - 1] == '&') {
+                background = 1;
+                command_group[strlen(command_group) - 1] = '\0';
+                trim(command_group);
+            }
+
+            if (strcmp(command_group, "history") == 0) {
+                show_history();
+            } else if (strcmp(command_group, "jobs") == 0) {
+                show_jobs();
+            } else {
+                execute_command(command_group, background);
+            }
+
+            command_group = strtok_r(NULL, ";", &saveptr1);
         }
 
-        // Cleanup
-        free_commands(commands, num_commands);
-        free(cmdline);
+        free(expanded_cmd);
     }
 
     printf("Shell exited.\n");
