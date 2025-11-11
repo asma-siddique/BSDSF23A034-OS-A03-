@@ -18,7 +18,9 @@ int main() {
         printf(SHELL_PROMPT);
         fflush(stdout);  // Force the prompt to display
         
-        cmdline = read_cmd();
+        cmdline = read_cmd(SHELL_PROMPT);
+
+
         
         if (cmdline == NULL) {
             // This means EOF (Ctrl+D) or empty input
