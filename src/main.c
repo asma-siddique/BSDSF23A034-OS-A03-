@@ -23,7 +23,7 @@ int main() {
         printf(SHELL_PROMPT);
         fflush(stdout);
 
-        cmdline = read_cmd(SHELL_PROMPT);
+        cmdline = read_cmd();
         if (cmdline == NULL) {
             // EOF (Ctrl+D) or empty input
             printf("\n");
