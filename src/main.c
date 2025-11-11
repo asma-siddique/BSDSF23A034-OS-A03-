@@ -21,7 +21,7 @@ static char* handle_history_recall(char *cmdline) {
 }
 
 // Trim leading/trailing spaces
-static void trim(char *str) {
+    void trim(char *str) {
     char *end;
 
     // Trim leading space
