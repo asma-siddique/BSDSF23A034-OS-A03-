@@ -5,6 +5,9 @@
 #include <dirent.h>
 
 static History history;
+static Job jobs[MAX_JOBS];
+static int job_count = 0;
+static int next_job_id = 1;
 
 // Initialize history
 void init_history(void) {
@@ -38,11 +41,9 @@ char* get_history_command(int n) {
 }
 
 // Simple input function
-char* read_cmd(const char* prompt) {
-    printf("%s", prompt);
-    fflush(stdout);
+char* read_cmd(void) {
+    char buffer[INPUT_BUFFER_SIZE];
     
-    static char buffer[INPUT_BUFFER_SIZE];
     if (fgets(buffer, INPUT_BUFFER_SIZE, stdin) == NULL) {
         return NULL;
     }
@@ -70,7 +71,85 @@ char** tokenize(char* line) {
     return tokens;
 }
 
-// Parse command line into commands with redirection and pipes
+// Initialize jobs array
+void init_jobs(void) {
+    for (int i = 0; i < MAX_JOBS; i++) {
+        jobs[i].pid = -1;
+        jobs[i].command = NULL;
+        jobs[i].job_id = 0;
+    }
+    job_count = 0;
+    next_job_id = 1;
+}
+
+// Add a background job
+void add_job(pid_t pid, const char* command) {
+    if (job_count >= MAX_JOBS) {
+        printf("Warning: Maximum jobs limit reached\n");
+        return;
+    }
+    
+    for (int i = 0; i < MAX_JOBS; i++) {
+        if (jobs[i].pid == -1) {
+            jobs[i].pid = pid;
+            jobs[i].command = strdup(command);
+            jobs[i].job_id = next_job_id++;
+            job_count++;
+            printf("[%d] %d\n", jobs[i].job_id, pid);
+            return;
+        }
+    }
+}
+
+// Remove a completed job
+void remove_job(pid_t pid) {
+    for (int i = 0; i < MAX_JOBS; i++) {
+        if (jobs[i].pid == pid) {
+            free(jobs[i].command);
+            jobs[i].pid = -1;
+            jobs[i].command = NULL;
+            jobs[i].job_id = 0;
+            job_count--;
+            return;
+        }
+    }
+}
+
+// Clean up zombie processes using waitpid(WNOHANG)
+void cleanup_zombies(void) {
+    int status;
+    pid_t pid;
+    
+    // Non-blocking wait to reap any completed child processes
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        remove_job(pid);
+    }
+}
+
+// Show all background jobs
+void show_jobs(void) {
+    printf("Jobs:\n");
+    int found = 0;
+    for (int i = 0; i < MAX_JOBS; i++) {
+        if (jobs[i].pid != -1) {
+            // Check if job is still running
+            int result = waitpid(jobs[i].pid, NULL, WNOHANG);
+            if (result == 0) {
+                // Job is still running
+                printf("[%d] Running %d %s\n", jobs[i].job_id, jobs[i].pid, jobs[i].command);
+                found = 1;
+            } else {
+                // Job has completed
+                remove_job(jobs[i].pid);
+            }
+        }
+    }
+    if (!found) {
+        printf("No background jobs\n");
+    }
+}
+
+// Enhanced parser to handle ; and &
 int parse_command_line(char* line, Command* commands) {
     char** tokens = tokenize(line);
     int cmd_count = 0;
@@ -80,26 +159,45 @@ int parse_command_line(char* line, Command* commands) {
     commands[cmd_count].argc = 0;
     commands[cmd_count].input_file = NULL;
     commands[cmd_count].output_file = NULL;
+    commands[cmd_count].background = 0;
     
     while (tokens[token_idx] != NULL) {
         if (strcmp(tokens[token_idx], "|") == 0) {
-            // Pipe detected - move to next command
             cmd_count++;
-            if (cmd_count >= MAX_PIPES) {
-                fprintf(stderr, "Error: Too many pipes (max %d)\n", MAX_PIPES);
+            if (cmd_count >= MAX_COMMANDS) {
+                fprintf(stderr, "Error: Too many commands (max %d)\n", MAX_COMMANDS);
                 for (int i = 0; tokens[i] != NULL; i++) free(tokens[i]);
                 free(tokens);
                 return -1;
             }
-            // Initialize new command
             commands[cmd_count].argc = 0;
             commands[cmd_count].input_file = NULL;
             commands[cmd_count].output_file = NULL;
+            commands[cmd_count].background = 0;
+            token_idx++;
+            continue;
+        }
+        else if (strcmp(tokens[token_idx], ";") == 0) {
+            cmd_count++;
+            if (cmd_count >= MAX_COMMANDS) {
+                fprintf(stderr, "Error: Too many commands (max %d)\n", MAX_COMMANDS);
+                for (int i = 0; tokens[i] != NULL; i++) free(tokens[i]);
+                free(tokens);
+                return -1;
+            }
+            commands[cmd_count].argc = 0;
+            commands[cmd_count].input_file = NULL;
+            commands[cmd_count].output_file = NULL;
+            commands[cmd_count].background = 0;
+            token_idx++;
+            continue;
+        }
+        else if (strcmp(tokens[token_idx], "&") == 0) {
+            commands[cmd_count].background = 1;
             token_idx++;
             continue;
         }
         else if (strcmp(tokens[token_idx], "<") == 0) {
-            // Input redirection
             if (tokens[token_idx + 1] == NULL) {
                 fprintf(stderr, "Error: No input file specified after <\n");
                 for (int i = 0; tokens[i] != NULL; i++) free(tokens[i]);
@@ -111,7 +209,6 @@ int parse_command_line(char* line, Command* commands) {
             continue;
         }
         else if (strcmp(tokens[token_idx], ">") == 0) {
-            // Output redirection
             if (tokens[token_idx + 1] == NULL) {
                 fprintf(stderr, "Error: No output file specified after >\n");
                 for (int i = 0; tokens[i] != NULL; i++) free(tokens[i]);
@@ -123,7 +220,6 @@ int parse_command_line(char* line, Command* commands) {
             continue;
         }
         else {
-            // Regular argument
             if (commands[cmd_count].argc < MAX_ARGS - 1) {
                 commands[cmd_count].args[commands[cmd_count].argc] = strdup(tokens[token_idx]);
                 commands[cmd_count].argc++;
@@ -157,8 +253,8 @@ void free_commands(Command* commands, int count) {
     }
 }
 
-// Execute single command with I/O redirection
-void execute_redirection(Command* cmd) {
+// Execute command with background support
+void execute_command(Command* cmd) {
     if (cmd->argc == 0) return;
     
     // Check if it's a built-in command first
@@ -169,140 +265,50 @@ void execute_redirection(Command* cmd) {
     pid_t pid = fork();
     
     if (pid == 0) {
-        // Child process - handle redirection
-        
-        // Input redirection
+        // Child process
         if (cmd->input_file != NULL) {
             int fd_in = open(cmd->input_file, O_RDONLY);
             if (fd_in < 0) {
                 perror("open input file");
                 exit(1);
             }
-            if (dup2(fd_in, STDIN_FILENO) == -1) {
-                perror("dup2 input");
-                exit(1);
-            }
+            dup2(fd_in, STDIN_FILENO);
             close(fd_in);
         }
         
-        // Output redirection
         if (cmd->output_file != NULL) {
             int fd_out = open(cmd->output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
             if (fd_out < 0) {
                 perror("open output file");
                 exit(1);
             }
-            if (dup2(fd_out, STDOUT_FILENO) == -1) {
-                perror("dup2 output");
-                exit(1);
-            }
+            dup2(fd_out, STDOUT_FILENO);
             close(fd_out);
         }
         
-        // Execute the command
         execvp(cmd->args[0], cmd->args);
         fprintf(stderr, "Command not found: %s\n", cmd->args[0]);
         exit(127);
     } 
     else if (pid > 0) {
-        int status;
-        waitpid(pid, &status, 0);
+        if (cmd->background) {
+            // Background job
+            add_job(pid, cmd->args[0]);
+        } else {
+            // Foreground job
+            int status;
+            waitpid(pid, &status, 0);
+        }
     } 
     else {
         perror("fork failed");
     }
 }
 
-// Execute pipeline of commands
-void execute_pipeline(Command* commands, int num_commands) {
-    int pipefds[2 * (num_commands - 1)];
-    pid_t pids[num_commands];
-    
-    // Create pipes
-    for (int i = 0; i < num_commands - 1; i++) {
-        if (pipe(pipefds + i * 2) < 0) {
-            perror("pipe");
-            return;
-        }
-    }
-    
-    // Fork child processes
-    for (int i = 0; i < num_commands; i++) {
-        pids[i] = fork();
-        
-        if (pids[i] == 0) {
-            // Child process
-            
-            // Connect to previous command's output
-            if (i > 0) {
-                if (dup2(pipefds[(i-1)*2], STDIN_FILENO) == -1) {
-                    perror("dup2 pipe input");
-                    exit(1);
-                }
-            }
-            
-            // Connect to next command's input
-            if (i < num_commands - 1) {
-                if (dup2(pipefds[i*2 + 1], STDOUT_FILENO) == -1) {
-                    perror("dup2 pipe output");
-                    exit(1);
-                }
-            }
-            
-            // Close all pipe file descriptors
-            for (int j = 0; j < 2 * (num_commands - 1); j++) {
-                close(pipefds[j]);
-            }
-            
-            // Handle file redirection
-            if (commands[i].input_file != NULL) {
-                int fd_in = open(commands[i].input_file, O_RDONLY);
-                if (fd_in < 0) {
-                    perror("open input file");
-                    exit(1);
-                }
-                dup2(fd_in, STDIN_FILENO);
-                close(fd_in);
-            }
-            
-            if (commands[i].output_file != NULL) {
-                int fd_out = open(commands[i].output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
-                if (fd_out < 0) {
-                    perror("open output file");
-                    exit(1);
-                }
-                dup2(fd_out, STDOUT_FILENO);
-                close(fd_out);
-            }
-            
-            // Execute command
-            execvp(commands[i].args[0], commands[i].args);
-            fprintf(stderr, "Command not found: %s\n", commands[i].args[0]);
-            exit(127);
-        }
-        else if (pids[i] < 0) {
-            perror("fork");
-            return;
-        }
-    }
-    
-    // Parent process - close all pipe ends
-    for (int i = 0; i < 2 * (num_commands - 1); i++) {
-        close(pipefds[i]);
-    }
-    
-    // Wait for all children
-    for (int i = 0; i < num_commands; i++) {
-        waitpid(pids[i], NULL, 0);
-    }
-}
-
-// Execute parsed commands
+// Execute commands sequentially
 void execute_parsed_commands(Command* commands, int num_commands) {
-    if (num_commands == 1) {
-        execute_redirection(&commands[0]);
-    } else {
-        execute_pipeline(commands, num_commands);
+    for (int i = 0; i < num_commands; i++) {
+        execute_command(&commands[i]);
     }
 }
 
@@ -327,22 +333,16 @@ int handle_builtin(char** arglist) {
     }
     
     if (strcmp(arglist[0], "exit") == 0) {
-        // Cleanup history
-        for (int i = 0; i < history.count; i++) {
-            free(history.commands[i]);
-        }
         printf("Shell exited.\n");
         exit(0);
     }
     
     if (strcmp(arglist[0], "help") == 0) {
-        printf("=== FCIT Shell with I/O Redirection & Pipes ===\n");
+        printf("=== FCIT Shell - Multitasking ===\n");
         printf("Built-in commands: cd, exit, help, history, jobs\n");
-        printf("I/O Redirection:\n");
-        printf("  command < input.txt    - Read input from file\n");
-        printf("  command > output.txt   - Write output to file\n");
-        printf("Pipes:\n");
-        printf("  cmd1 | cmd2 | cmd3     - Chain commands together\n");
+        printf("Command Chaining: cmd1 ; cmd2 ; cmd3\n");
+        printf("Background Execution: long_cmd &\n");
+        printf("Job Control: jobs\n");
         return 1;
     }
     
@@ -352,7 +352,7 @@ int handle_builtin(char** arglist) {
     }
     
     if (strcmp(arglist[0], "jobs") == 0) {
-        printf("Job control not yet implemented.\n");
+        show_jobs();
         return 1;
     }
     
